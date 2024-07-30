@@ -26,7 +26,8 @@ const app = express();
 app.set('view engine', 'hbs');
 
 // MongoDB Atlas connection URI
-const uri = "mongodb+srv://labspot:labspotDB@labspotdb.ur5c8sv.mongodb.net/labSpotDB?retryWrites=true&w=majority";
+const uri = process.env.MONGODB_URI || "mongodb+srv://labspot:labspotDB@labspotdb.ur5c8sv.mongodb.net/labSpotDB?retryWrites=true&w=majority";
+
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 mongoose.connect(uri, {
