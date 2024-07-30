@@ -509,7 +509,7 @@ app.get('/api/users', async (req, res) => {
   const { query, college, degree } = req.query;
 
   try {
-    const filter = { isTechnician: false };
+    const filter = { isTechnician: false ,  userID: { $ne: 1 }   };
 
     if (query) {
       filter.name = { $regex: query, $options: 'i' }; // Case-insensitive search
