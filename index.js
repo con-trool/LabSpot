@@ -11,20 +11,27 @@ const Seat = require('./database/models/Seat');
 const path = require('path');
 const bodyParser = require('body-parser');
 const hbs = require('hbs');
+
 hbs.registerHelper('lookup', function (obj, field, attr) {
   return (obj && obj[field]) ? obj[field][attr] : '';
 });
 hbs.registerHelper('substring', function (seatID) {
   return seatID.split('-').pop(); // Adjust this logic according to the seatID format
 });
-
 hbs.registerHelper('increment', function (index) {
   return index + 1;
 });
+
 const app = express();
 app.set('view engine', 'hbs');
 
-mongoose.connect('mongodb://localhost/labSpotDB', {
+// Connect to MongoDB Atlas
+const uri = "mongodb+srv://labspot:labspotDB@labspotdb.ur5c8sv.mongodb.net/labSpotDB?retryWrites=true&w=majority";
+
+// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+mongoose.connect(uri, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
 }).then(() => {
   console.log('MongoDB connected...');
 }).catch(err => {
@@ -48,7 +55,7 @@ app.use(session({
   secret: 'your_secret_key',
   resave: false,
   saveUninitialized: false,
-  store: MongoStore.create({ mongoUrl: 'mongodb://localhost/labSpotDB' }),
+  store: MongoStore.create({ mongoUrl: uri }),
   cookie: { maxAge: 1000 * 60 * 60 * 24 } // 1 day
 }));
 
@@ -113,9 +120,6 @@ app.get('/reservation', isAuthenticated, async (req, res) => {
   }
 });
 
-
-
-
 app.get('/profile/:id', isAuthenticated, async (req, res) => {
   try {
     const userID = parseInt(req.params.id, 10); // Ensure userID is an integer
@@ -133,6 +137,7 @@ app.get('/profile/:id', isAuthenticated, async (req, res) => {
     res.status(500).send('Server error');
   }
 });
+
 // Routes that don't require authentication
 app.get('/login', function (req, res) {
   let credentials = { email: '', password: '' };
@@ -145,7 +150,6 @@ app.get('/login', function (req, res) {
 
   res.render('login', { credentials });
 });
-
 
 app.post('/login', async (req, res) => {
   const { email, password, rememberMe } = req.body;
@@ -214,6 +218,7 @@ app.get('/technicianpage', isAuthenticated, async (req, res) => {
 app.get('/register', function (req, res) {
   res.render('register');
 });
+
 app.post('/register', async function (req, res) {
   const { email, password, isTechnician } = req.body;
 
@@ -299,8 +304,6 @@ app.get('/menu', isAuthenticated, async (req, res) => {
   }
 });
 
-
-
 app.get('/userprofile', isAuthenticated, async (req, res) => {
   try {
     const user = await User.findById(req.session.userId);
@@ -370,7 +373,6 @@ app.get('/api/seats', async (req, res) => {
     res.status(500).send('Server error');
   }
 });
-
 
 app.get('/api/user/:id', async (req, res) => {
   try {
@@ -560,19 +562,36 @@ app.post('/api/cancel', isAuthenticated, async (req, res) => {
   const { date, timeslot, seatID, userID } = req.body;
 
   try {
-      const query = { seatID, date, time: timeslot, userID: userID || null };
-      const seat = await Seat.findOne(query);
-      if (seat) {
-          seat.isAvailable = true;
-          seat.userID = null;
-          seat.isAnonymous = false;
-          await seat.save();
-          res.json({ success: true });
-      } else {
-          res.json({ success: false, message: 'Seat not found or user not authorized to cancel this reservation' });
-      }
+    const currentTime = new Date();
+    const scheduleTime = new Date(`${date}T${timeslot.split('-')[0]}:00`); // Assuming timeslot format is 'HH:mm-HH:mm'
+
+    console.log('Current Time:', currentTime);
+    console.log('Schedule Start Time:', scheduleTime);
+
+    if (currentTime < scheduleTime) {
+      return res.status(400).json({ success: false, message: 'Cannot cancel reservation before the start time' });
+    }
+
+    const timeDifference = (currentTime - scheduleTime) / 60000; // Difference in minutes
+    console.log('Time Difference (in minutes):', timeDifference);
+
+    if (timeDifference < 10) {
+      return res.status(400).json({ success: false, message: 'Cannot cancel reservation within 10 minutes of the start time' });
+    }
+
+    const query = { seatID, date, time: timeslot, userID: userID || null };
+    const seat = await Seat.findOne(query);
+    if (seat) {
+      seat.isAvailable = true;
+      seat.userID = null;
+      seat.isAnonymous = false;
+      await seat.save();
+      res.json({ success: true });
+    } else {
+      res.json({ success: false, message: 'Seat not found or user not authorized to cancel this reservation' });
+    }
   } catch (error) {
-      res.status(500).send('Server error');
+    res.status(500).send('Server error');
   }
 });
 
@@ -581,108 +600,104 @@ app.post('/api/editReservation', isAuthenticated, async (req, res) => {
   console.log('Edit reservation request received with:', { oldDate, oldTimeslot, oldSeatID, newDate, newTimeslot, newSeatID, userID, isAnonymous });
 
   try {
-      // Check if the new seat is the same as the old seat
-      if (oldDate === newDate && oldTimeslot === newTimeslot && oldSeatID === newSeatID) {
-          const seat = await Seat.findOne({ seatID: oldSeatID, date: oldDate, time: oldTimeslot, userID });
-          console.log('Same seat being updated:', seat);
+    // Check if the new seat is the same as the old seat
+    if (oldDate === newDate && oldTimeslot === newTimeslot && oldSeatID === newSeatID) {
+      const seat = await Seat.findOne({ seatID: oldSeatID, date: oldDate, time: oldTimeslot, userID });
+      console.log('Same seat being updated:', seat);
 
-          if (seat) {
-              seat.isAnonymous = isAnonymous;
-              await seat.save();
-              console.log('Reservation updated successfully for the same seat:', seat);
-              return res.json({ success: true });
-          } else {
-              return res.status(404).json({ success: false, message: 'Seat not found or user not authorized to update this reservation' });
-          }
-      }
-
-      // Check availability and reserve the new seat
-      const newSeat = await Seat.findOne({ seatID: newSeatID, date: newDate, time: newTimeslot });
-      console.log('New seat fetched:', newSeat);
-
-      if (!newSeat) {
-          return res.status(404).json({ success: false, message: 'New seat not found' });
-      }
-
-      if (!newSeat.isAvailable) {
-          return res.status(400).json({ success: false, message: 'New seat is already reserved' });
-      }
-
-      newSeat.isAvailable = false;
-      newSeat.userID = userID;
-      newSeat.isAnonymous = isAnonymous;
-      await newSeat.save();
-      console.log('New seat reserved successfully:', newSeat);
-
-      // Cancel the old reservation
-      const oldSeat = await Seat.findOne({ seatID: oldSeatID, date: oldDate, time: oldTimeslot, userID });
-      console.log('Old seat fetched:', oldSeat);
-
-      if (oldSeat) {
-          oldSeat.isAvailable = true;
-          oldSeat.userID = null;
-          oldSeat.isAnonymous = true;
-          await oldSeat.save();
-          console.log('Old reservation cancelled successfully:', oldSeat);
-          res.json({ success: true });
+      if (seat) {
+        seat.isAnonymous = isAnonymous;
+        await seat.save();
+        console.log('Reservation updated successfully for the same seat:', seat);
+        return res.json({ success: true });
       } else {
-          res.json({ success: false, message: 'Old seat not found or user not authorized to cancel this reservation' });
+        return res.status(404).json({ success: false, message: 'Seat not found or user not authorized to update this reservation' });
       }
+    }
+
+    // Check availability and reserve the new seat
+    const newSeat = await Seat.findOne({ seatID: newSeatID, date: newDate, time: newTimeslot });
+    console.log('New seat fetched:', newSeat);
+
+    if (!newSeat) {
+      return res.status(404).json({ success: false, message: 'New seat not found' });
+    }
+
+    if (!newSeat.isAvailable) {
+      return res.status(400).json({ success: false, message: 'New seat is already reserved' });
+    }
+
+    newSeat.isAvailable = false;
+    newSeat.userID = userID;
+    newSeat.isAnonymous = isAnonymous;
+    await newSeat.save();
+    console.log('New seat reserved successfully:', newSeat);
+
+    // Cancel the old reservation
+    const oldSeat = await Seat.findOne({ seatID: oldSeatID, date: oldDate, time: oldTimeslot, userID });
+    console.log('Old seat fetched:', oldSeat);
+
+    if (oldSeat) {
+      oldSeat.isAvailable = true;
+      oldSeat.userID = null;
+      oldSeat.isAnonymous = true;
+      await oldSeat.save();
+      console.log('Old reservation cancelled successfully:', oldSeat);
+      res.json({ success: true });
+    } else {
+      res.json({ success: false, message: 'Old seat not found or user not authorized to cancel this reservation' });
+    }
   } catch (error) {
-      console.error('Server error:', error);
-      res.status(500).send('Server error');
+    console.error('Server error:', error);
+    res.status(500).send('Server error');
   }
 });
 
 app.get('/api/searchUser', async (req, res) => {
   const { userID } = req.query;
   try {
-      const user = await User.findOne({ userID });
-      if (user) {
-          res.json(user);
-      } else {
-          res.status(404).json({ message: 'User not found' });
-      }
+    const user = await User.findOne({ userID });
+    if (user) {
+      res.json(user);
+    } else {
+      res.status(404).json({ message: 'User not found' });
+    }
   } catch (error) {
-      console.error('Error fetching user:', error);
-      res.status(500).send('Server error');
+    console.error('Error fetching user:', error);
+    res.status(500).send('Server error');
   }
 });
 
-
-
 app.post('/api/bookReservation', async (req, res) => {
-    const { userID, date, time, seatID, building, isAnonymous } = req.body;
-    console.log('Book seat request received with:', { userID, date, time, seatID, building, isAnonymous });
-  
-    try {
-      // Check if the seat exists
-      const seat = await Seat.findOne({ seatID, date, time });
-      console.log('Seat fetched:', seat);
-  
-      if (!seat) {
-        return res.status(404).json({ success: false, message: 'Seat not found' });
-      }
-  
-      if (!seat.isAvailable) {
-        return res.status(400).json({ success: false, message: 'Seat is already reserved' });
-      }
-  
-      // Book the seat
-      seat.isAvailable = false;
-      seat.userID = userID;
-      seat.isAnonymous = isAnonymous;
-      await seat.save();
-      console.log('Seat booked successfully:', seat);
-  
-      res.json({ success: true });
-    } catch (error) {
-      console.error('Server error:', error);
-      res.status(500).send('Server error');
+  const { userID, date, time, seatID, building, isAnonymous } = req.body;
+  console.log('Book seat request received with:', { userID, date, time, seatID, building, isAnonymous });
+
+  try {
+    // Check if the seat exists
+    const seat = await Seat.findOne({ seatID, date, time });
+    console.log('Seat fetched:', seat);
+
+    if (!seat) {
+      return res.status(404).json({ success: false, message: 'Seat not found' });
     }
-  });
 
+    if (!seat.isAvailable) {
+      return res.status(400).json({ success: false, message: 'Seat is already reserved' });
+    }
 
+    // Book the seat
+    seat.isAvailable = false;
+    seat.userID = userID;
+    seat.isAnonymous = isAnonymous;
+    await seat.save();
+    console.log('Seat booked successfully:', seat);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Server error:', error);
+    res.status(500).send('Server error');
+  }
+});
 
 app.get('/otherprofile', function (req, res) {
   res.sendFile(__dirname + "/otherprofile.html");
