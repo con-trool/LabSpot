@@ -21,20 +21,22 @@ hbs.registerHelper('substring', function (seatID) {
 hbs.registerHelper('increment', function (index) {
   return index + 1;
 });
-
+hbs.registerHelper('isGuestUser', function(userId, options) {
+  return userId === 1 ? options.fn(this) : options.inverse(this);
+});
+hbs.registerHelper('eq', function (a, b) {
+  return a == b;
+});
 const app = express();
 app.set('view engine', 'hbs');
 
 // MongoDB Atlas connection URI
 const uri = process.env.MONGODB_URI || "mongodb+srv://labspot:labspotDB@labspotdb.ur5c8sv.mongodb.net/labSpotDB?retryWrites=true&w=majority";
 
-
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 mongoose.connect(uri, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 60000, // Increase timeout to 30 seconds
-  connectTimeoutMS: 60000 // Increase connection timeout to 30 seconds
+  serverSelectionTimeoutMS: 50000, // Increase timeout to 50 seconds
+  connectTimeoutMS: 50000 // Increase connection timeout to 50 seconds
 }).then(() => {
   console.log('MongoDB connected...');
 }).catch(err => {
@@ -83,6 +85,60 @@ async function isAuthenticated(req, res, next) {
     res.redirect('/login'); // User is not authenticated, redirect to login
   }
 }
+
+// Middleware to allow guest users
+const allowGuest = (req, res, next) => {
+  if (req.query.guest === 'true') {
+    req.isGuest = true;
+  } else {
+    req.isGuest = false;
+  }
+  next();
+};
+app.get('/menu', allowGuest, async (req, res) => {
+  try {
+    let user;
+    if (req.isGuest) {
+      user = { userID: 1, isTechnician: false, name: 'Guest' }; // Guest user details
+      console.log('Accessing menu as guest');
+    } else {
+      user = await User.findById(req.session.userId);
+      if (!user) {
+        return res.redirect('/login');
+      }
+    }
+    const userId = user.userID;
+    const isTechnician = user.isTechnician;
+    console.log('User ID:', userId);
+    console.log('Is Technician:', isTechnician);
+    res.render('menu', { userId, isTechnician, isGuest: req.isGuest });
+  } catch (error) {
+    console.error('Error fetching user data:', error);
+    res.status(500).send('Server error');
+  }
+});
+
+app.get('/GOKSreserve', allowGuest, async (req, res) => {
+  try {
+    let user;
+    if (req.isGuest) {
+      user = { userID: 1, isTechnician: false, name: 'Guest' }; // Guest user details
+      console.log('Accessing GOKSreserve as guest');
+    } else {
+      console.log('Accessing GOKSreserve as logged-in user');
+      user = await User.findById(req.session.userId);
+      if (!user) {
+        console.log('User not found, redirecting to login');
+        return res.redirect('/login');
+      }
+    }
+    console.log('User ID:', user.userID);
+    res.render('GOKSreserve', { user });
+  } catch (error) {
+    console.error('Error fetching user data:', error);
+    res.status(500).send('Server error');
+  }
+});
 
 app.get('/reservation', isAuthenticated, async (req, res) => {
   try {
@@ -289,24 +345,6 @@ app.get('/logout', (req, res) => {
   });
 });
 
-// Routes that require authentication
-app.get('/menu', isAuthenticated, async (req, res) => {
-  try {
-    const user = await User.findById(req.session.userId);
-    if (!user) {
-      return res.redirect('/login');
-    }
-    const userId = user.userID;
-    const isTechnician = req.session.isTechnician;
-    console.log('User ID:', userId);
-    console.log('Is Technician:', isTechnician);
-    res.render('menu', { userId, isTechnician });
-  } catch (error) {
-    console.error('Error fetching user data:', error);
-    res.status(500).send('Server error');
-  }
-});
-
 app.get('/userprofile', isAuthenticated, async (req, res) => {
   try {
     const user = await User.findById(req.session.userId);
@@ -356,9 +394,17 @@ app.get('/deleteprofile', isAuthenticated, function (req, res) {
   res.sendFile(__dirname + "/deleteprofile.html");
 });
 
-app.get('/AGreserve', isAuthenticated, async (req, res) => {
+app.get('/AGreserve', allowGuest, async (req, res) => {
   try {
-    const user = await User.findById(req.session.userId);
+    let user;
+    if (req.isGuest) {
+      user = { userID: 1, isTechnician: false, name: 'Guest' }; // Guest user details
+    } else {
+      user = await User.findById(req.session.userId);
+      if (!user) {
+        return res.redirect('/login');
+      }
+    }
     res.render('AGreserve', { user });
   } catch (error) {
     console.error('Error fetching user data:', error);
@@ -440,19 +486,18 @@ app.get('/freeslotsearch', function (req, res) {
   res.sendFile(__dirname + "/freeslotsearch.html");
 });
 
-app.get('/GOKSreserve', isAuthenticated, async (req, res) => {
-  try {
-    const user = await User.findById(req.session.userId);
-    res.render('GOKSreserve', { user });
-  } catch (error) {
-    console.error('Error fetching user data:', error);
-    res.status(500).send('Server error');
-  }
-});
 
-app.get('/VELreserve', isAuthenticated, async (req, res) => {
+app.get('/VELreserve', allowGuest, async (req, res) => {
   try {
-    const user = await User.findById(req.session.userId);
+    let user;
+    if (req.isGuest) {
+      user = { userID: 1, isTechnician: false, name: 'Guest' }; // Guest user details
+    } else {
+      user = await User.findById(req.session.userId);
+      if (!user) {
+        return res.redirect('/login');
+      }
+    }
     res.render('VELreserve', { user });
   } catch (error) {
     console.error('Error fetching user data:', error);
@@ -655,35 +700,35 @@ app.get('/api/searchUser', async (req, res) => {
 });
 
 app.post('/api/bookReservation', async (req, res) => {
-  const { userID, date, time, seatID, building, isAnonymous } = req.body;
-  console.log('Book seat request received with:', { userID, date, time, seatID, building, isAnonymous });
-
-  try {
-    // Check if the seat exists
-    const seat = await Seat.findOne({ seatID, date, time });
-    console.log('Seat fetched:', seat);
-
-    if (!seat) {
-      return res.status(404).json({ success: false, message: 'Seat not found' });
+    const { userID, date, time, seatID, building, isAnonymous } = req.body;
+    console.log('Book seat request received with:', { userID, date, time, seatID, building, isAnonymous });
+  
+    try {
+      // Check if the seat exists
+      const seat = await Seat.findOne({ seatID, date, time });
+      console.log('Seat fetched:', seat);
+  
+      if (!seat) {
+        return res.status(404).json({ success: false, message: 'Seat not found' });
+      }
+  
+      if (!seat.isAvailable) {
+        return res.status(400).json({ success: false, message: 'Seat is already reserved' });
+      }
+  
+      // Book the seat
+      seat.isAvailable = false;
+      seat.userID = userID;
+      seat.isAnonymous = isAnonymous;
+      await seat.save();
+      console.log('Seat booked successfully:', seat);
+  
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Server error:', error);
+      res.status(500).send('Server error');
     }
-
-    if (!seat.isAvailable) {
-      return res.status(400).json({ success: false, message: 'Seat is already reserved' });
-    }
-
-    // Book the seat
-    seat.isAvailable = false;
-    seat.userID = userID;
-    seat.isAnonymous = isAnonymous;
-    await seat.save();
-    console.log('Seat booked successfully:', seat);
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Server error:', error);
-    res.status(500).send('Server error');
-  }
-});
+  });
 
 app.get('/otherprofile', function (req, res) {
   res.sendFile(__dirname + "/otherprofile.html");
@@ -717,38 +762,38 @@ async function populateSeats() {
   endDate.setDate(startDate.getDate() + 7);
 
   for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
-    const formattedDate = date.toISOString().split('T')[0];
+    const dateString = date.toISOString().split('T')[0];
 
-    for (const building of Object.keys(buildings)) {
+    for (const building in buildings) {
+      const seatCount = buildings[building];
+
       for (const timeslot of timeslots) {
-        for (let seatNumber = 1; seatNumber <= buildings[building]; seatNumber++) {
-          const seatID = `${building}-${formattedDate}-${timeslot}-${seatNumber}`;
-          const seatExists = await Seat.findOne({ seatID, date: formattedDate, time: timeslot });
+        for (let seatNumber = 1; seatNumber <= seatCount; seatNumber++) {
+          const seatID = `${building}-${seatNumber}`;
+          const existingSeat = await Seat.findOne({ seatID, date: dateString, time: timeslot });
 
-          if (!seatExists) {
-            const newSeat = new Seat({
+          if (!existingSeat) {
+            const seat = new Seat({
               seatID,
+              date: dateString,
+              time: timeslot,
               building,
-              userID: null,
-              isAvailable: true,
-              isAnonymous: false,
-              date: formattedDate,
-              time: timeslot
+              isAvailable: true
             });
 
-            await newSeat.save();
-            console.log(`Added seat: ${seatID}`);
+            await seat.save();
           }
         }
       }
     }
   }
+
+  console.log('Seats populated');
 }
 
-schedule.scheduleJob('0 1 * * *', populateSeats); // Run daily at 1:00 AM
+// Uncomment the following line to run the function to populate seats
+// populateSeats();
 
-populateSeats(); // Initial population on script run
-
-var server = app.listen(5000, function () {
-  console.log("listening to port 5000...");
+app.listen(5000, () => {
+  console.log('Server is running on port 5000');
 });

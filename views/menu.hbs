@@ -205,22 +205,22 @@
     </div>
 
     <div class="main-content">
-      <div class="box" onclick="location.href='GOKSreserve'">
+      <div class="box" onclick="goToPage('GOKSreserve')">
         <img src="img/goks.png" alt="goks">
         <h3>John Gokongwei Sr. Hall</h3>
       </div>
-      <div class="box" onclick="location.href='AGreserve'">
+      <div class="box" onclick="goToPage('AGreserve')">
         <img src="img/andrew.png" alt="andrew">
         <h3>Br. Andrew Gonzales Hall</h3>
       </div>
-      <div class="box" onclick="location.href='VELreserve'">
+      <div class="box" onclick="goToPage('VELreserve')">
         <img src="img/velasco.png" alt="velasco">
         <h3>Velasco Hall</h3>
       </div>
     </div>
   </div>
   <div class="center">
-    <div class="box" onclick="location.href='usersearch'">
+    <div class="box" onclick="guestSearch() ">
       <h3><i class="fa fa-search icon-spacing"></i>   Search for users</h3>
     </div>
     <div class="box" onclick="location.href='freeslotsearch'">
@@ -229,19 +229,36 @@
   </div>
 
   <dialog id="guest">
-    <h2>Please Login to Book Seats</h2>
+    <h2>Please Login to View Profile</h2>
     <button onclick="closeGuestDialog();" aria-label="close" class="x">❌</button>
     <span style="align-items: center; display: flex; flex-direction: row; justify-content: center; margin-bottom: 50px;">
       <button onclick="closeGuestDialog(); location.href='index'" class="bdialog">Go back to Homepage</button>
     </span>
   </dialog>
-
+ <dialog id="guest1">
+    <h2>Please Login to Search Users</h2>
+    <button onclick="closeGuestDialog1();" aria-label="close" class="x">❌</button>
+    <span style="align-items: center; display: flex; flex-direction: row; justify-content: center; margin-bottom: 50px;">
+      <button onclick="closeGuestDialog1(); location.href='index'" class="bdialog">Go back to Homepage</button>
+    </span>
+  </dialog>
   <script>
     function closeGuestDialog() {
       const guestDialog = document.getElementById('guest');
       guestDialog.close();
     }
-
+  function closeGuestDialog1() {
+      const guestDialog = document.getElementById('guest1');
+      guestDialog.close();
+    }
+    function guestSearch() {
+       if (isUserLoggedIn()) {
+        location.href = 'userprofile';
+      } else {
+        const guestDialog = document.getElementById('guest1');
+        guestDialog.showModal();
+      }
+    }
     function checkGuest() {
       if (isUserLoggedIn()) {
         location.href = 'userprofile';
@@ -251,9 +268,19 @@
       }
     }
 
-    function isUserLoggedIn() {
-      return {{#if userId}}true{{else}}false{{/if}};
+    function goToPage(page) {
+      const isGuest = {{isGuest}};
+      if (isGuest) {
+        location.href = `${page}?guest=true`;
+      } else {
+        location.href = page;
+      }
     }
+
+ function isUserLoggedIn() {
+  return {{#if userId}}{{#unless (eq userId 1)}}true{{else}}false{{/unless}}{{else}}false{{/if}};
+}
+
 
     document.addEventListener('DOMContentLoaded', function() {
       document.querySelector('.profile-icon').onclick = checkGuest;

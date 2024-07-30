@@ -290,7 +290,7 @@ async function showReservedModal(seat) {
       const seatID = document.getElementById('selectedSeat').textContent;
       const isAnonymous = document.querySelector('input[name="radio"]:checked').value === 'Yes';
       
-      if (!userID) {
+      if (!userID || userID === '1') {
         const guestDialog = document.getElementById('guest');
         guestDialog.showModal();
         return;
