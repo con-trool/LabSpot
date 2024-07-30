@@ -32,8 +32,8 @@ const uri = "mongodb+srv://labspot:labspotDB@labspotdb.ur5c8sv.mongodb.net/labSp
 mongoose.connect(uri, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 30000, // Increase timeout to 30 seconds
-  connectTimeoutMS: 30000 // Increase connection timeout to 30 seconds
+  serverSelectionTimeoutMS: 60000, // Increase timeout to 30 seconds
+  connectTimeoutMS: 60000 // Increase connection timeout to 30 seconds
 }).then(() => {
   console.log('MongoDB connected...');
 }).catch(err => {
