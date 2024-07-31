@@ -256,7 +256,9 @@ app.get('/technicianpage', isAuthenticated, async (req, res) => {
 
     // Create a map of users for easy lookup
     const usersMap = users.reduce((map, user) => {
-      map[user.userID.toString()] = user;
+      if (user.userID) {
+        map[user.userID.toString()] = user;
+      }
       return map;
     }, {});
 
