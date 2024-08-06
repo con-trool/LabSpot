@@ -3,7 +3,7 @@ const Building = require('./database/models/Building');
 const Schedule = require('./database/models/Schedule');
 const Seat = require('./database/models/Seat');
 
-mongoose.connect('mongodb://localhost/labSpotDB', {
+mongoose.connect('mongodb+srv://labspot:labspotDB@labspotdb.ur5c8sv.mongodb.net/labSpotDB?retryWrites=true&w=majority', {
   useNewUrlParser: true,
   useUnifiedTopology: true
 }).then(() => {

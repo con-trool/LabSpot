@@ -39,6 +39,7 @@ mongoose.connect(uri, {
   connectTimeoutMS: 50000 // Increase connection timeout to 50 seconds
 }).then(() => {
   console.log('MongoDB connected...');
+  populateSeats(); // Initial population on script run
 }).catch(err => {
   console.error('MongoDB connection error:', err);
 });
@@ -764,38 +765,39 @@ async function populateSeats() {
   endDate.setDate(startDate.getDate() + 7);
 
   for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
-    const dateString = date.toISOString().split('T')[0];
+    const formattedDate = date.toISOString().split('T')[0];
 
-    for (const building in buildings) {
-      const seatCount = buildings[building];
-
+    for (const building of Object.keys(buildings)) {
       for (const timeslot of timeslots) {
-        for (let seatNumber = 1; seatNumber <= seatCount; seatNumber++) {
-          const seatID = `${building}-${seatNumber}`;
-          const existingSeat = await Seat.findOne({ seatID, date: dateString, time: timeslot });
+        for (let seatNumber = 1; seatNumber <= buildings[building]; seatNumber++) {
+          const seatID = `${building}-${formattedDate}-${timeslot}-${seatNumber}`;
+          const seatExists = await Seat.findOne({ seatID, date: formattedDate, time: timeslot });
 
-          if (!existingSeat) {
-            const seat = new Seat({
+          if (!seatExists) {
+            const newSeat = new Seat({
               seatID,
-              date: dateString,
-              time: timeslot,
               building,
-              isAvailable: true
+              userID: null,
+              isAvailable: true,
+              isAnonymous: false,
+              date: formattedDate,
+              time: timeslot
             });
 
-            await seat.save();
+            await newSeat.save();
+            console.log(`Added seat: ${seatID}`);
           }
         }
       }
     }
   }
-
-  console.log('Seats populated');
 }
 
+schedule.scheduleJob('0 1 * * *', populateSeats); // Run daily at 1:00 AM
 
- populateSeats();
 
-app.listen(5000, () => {
-  console.log('Server is running on port 5000');
+
+var server = app.listen(5000, function () {
+  console.log("listening to port 5000...");
+
 });
