@@ -12,13 +12,13 @@ const path = require('path');
 const bodyParser = require('body-parser');
 const hbs = require('hbs');
 
-hbs.registerHelper('lookup', function (obj, field, attr) {
+hbs.registerHelper('lookup', function (obj, field, attr) { //technicianpage
   return (obj && obj[field]) ? obj[field][attr] : '';
 });
-hbs.registerHelper('substring', function (seatID) {
+hbs.registerHelper('substring', function (seatID) { //reservation
   return seatID.split('-').pop(); // Adjust this logic according to the seatID format
 });
-hbs.registerHelper('increment', function (index) {
+hbs.registerHelper('increment', function (index) { //reservation
   return index + 1;
 });
 hbs.registerHelper('isGuestUser', function(userId, options) {
@@ -793,8 +793,8 @@ async function populateSeats() {
   console.log('Seats populated');
 }
 
-// Uncomment the following line to run the function to populate seats
-// populateSeats();
+
+ populateSeats();
 
 app.listen(5000, () => {
   console.log('Server is running on port 5000');
