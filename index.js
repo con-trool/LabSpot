@@ -39,7 +39,7 @@ mongoose.connect(uri, {
   connectTimeoutMS: 50000 // Increase connection timeout to 50 seconds
 }).then(() => {
   console.log('MongoDB connected...');
-  populateSeats(); // Initial population on script run
+ // populateSeats(); // Initial population on script run
 }).catch(err => {
   console.error('MongoDB connection error:', err);
 });
